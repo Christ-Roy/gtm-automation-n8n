@@ -1,0 +1,700 @@
+{
+  "name": "MCP GTM Autonome",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [
+        220,
+        160
+      ],
+      "id": "e757d8ef-180e-438d-89d1-c7f88151f994"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "accountId",
+              "value": "={{ $json.accountId || \"6276037669\" }}"
+            },
+            {
+              "name": "containerId",
+              "value": "={{ $json.containerId || \"210165143\" }}"
+            },
+            {
+              "name": "workspaceId",
+              "value": "={{ $json.workspaceId || \"1\" }}"
+            },
+            {
+              "name": "conversionId",
+              "value": "={{ $json.conversionId || \"16965181803\" }}"
+            },
+            {
+              "name": "conversionLabel",
+              "value": "={{ $json.conversionLabel || \"h2PJCLqBiLQaEOvC0Jk_\" }}"
+            },
+            {
+              "name": "autoPublish",
+              "value": "={{ $json.autoPublish || true }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Paramètres d'entrée",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        440,
+        160
+      ],
+      "id": "9ce33bc0-710f-4d38-80d7-f09b2a9a5399"
+    },
+    {
+      "parameters": {
+        "url": "=https://tagmanager.googleapis.com/tagmanager/v2/accounts/{{$node[\"Paramètres d'entrée\"].json[\"accountId\"]}}/containers/{{$node[\"Paramètres d'entrée\"].json[\"containerId\"]}}/workspaces/{{$node[\"Paramètres d'entrée\"].json[\"workspaceId\"]}}/triggers",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "options": {}
+      },
+      "name": "Récupérer les déclencheurs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        660,
+        320
+      ],
+      "id": "d291460c-eda2-4482-bb08-076b63950ddd",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "vNG2KvbLx9MfF0Iq",
+          "name": "Google tag manager"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Récupérer les données d'entrée\nconst triggers = $input.all()[0].json.trigger || [];\n\n// Définir les types de déclencheurs à créer\nconst customTriggerTypes = [\n  {\n    name: \"formulaireSoumis\",\n    type: \"customEvent\",\n    customEventFilter: [\n      {\n        type: \"equals\",\n        parameter: [\n          { key: \"arg0\", value: \"{{_event}}\" },\n          { key: \"arg1\", value: \"formulaireSoumis\" }\n        ]\n      }\n    ]\n  },\n  {\n    name: \"phoneClick\",\n    type: \"customEvent\",\n    customEventFilter: [\n      {\n        type: \"equals\",\n        parameter: [\n          { key: \"arg0\", value: \"{{_event}}\" },\n          { key: \"arg1\", value: \"phoneClick\" }\n        ]\n      }\n    ]\n  },\n  {\n    name: \"pageView\",\n    type: \"pageview\",\n    customEventFilter: []\n  }\n];\n\n// Initialiser l'analyse des déclencheurs\nlet triggerAnalysis = {\n  existingTriggers: {},\n  needsCreation: [],\n  accountId: $node[\"Paramètres d'entrée\"].json[\"accountId\"],\n  containerId: $node[\"Paramètres d'entrée\"].json[\"containerId\"],\n  workspaceId: $node[\"Paramètres d'entrée\"].json[\"workspaceId\"],\n  allTriggersSummary: []\n};\n\n// Analyser les déclencheurs existants\ntriggers.forEach(trigger => {\n  triggerAnalysis.allTriggersSummary.push({\n    name: trigger.name,\n    type: trigger.type,\n    path: trigger.path\n  });\n  \n  // Chercher si c'est un déclencheur qui nous intéresse\n  const matchingTriggerType = customTriggerTypes.find(type => \n    trigger.name.toLowerCase().includes(type.name.toLowerCase()));\n    \n  if (matchingTriggerType) {\n    triggerAnalysis.existingTriggers[matchingTriggerType.name] = {\n      exists: true,\n      path: trigger.path,\n      triggerId: trigger.triggerId\n    };\n  }\n});\n\n// Identifier quels déclencheurs doivent être créés\ncustomTriggerTypes.forEach(triggerType => {\n  if (!triggerAnalysis.existingTriggers[triggerType.name]) {\n    triggerAnalysis.needsCreation.push(triggerType);\n    triggerAnalysis.existingTriggers[triggerType.name] = {\n      exists: false,\n      path: null,\n      triggerId: null\n    };\n  }\n});\n\nreturn triggerAnalysis;"
+      },
+      "name": "Analyser les déclencheurs",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        880,
+        320
+      ],
+      "id": "4d4c9337-9e34-4d3d-b96e-22fa0f236ab5"
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "batchInterval": 1000,
+        "options": {}
+      },
+      "name": "Déclencheurs à créer",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        320
+      ],
+      "id": "66fc2e7f-52d5-4167-ace1-a9f20e504d53",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tagmanager.googleapis.com/tagmanager/v2/accounts/{{$node[\"Analyser les déclencheurs\"].json[\"accountId\"]}}/containers/{{$node[\"Analyser les déclencheurs\"].json[\"containerId\"]}}/workspaces/{{$node[\"Analyser les déclencheurs\"].json[\"workspaceId\"]}}/triggers",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "name",
+              "value": "={{$json.name}}"
+            },
+            {
+              "name": "type",
+              "value": "={{$json.type}}"
+            },
+            {
+              "name": "customEventFilter",
+              "value": "={{$json.customEventFilter}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Créer déclencheur",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1320,
+        320
+      ],
+      "id": "f9c52656-436a-47aa-8fc3-1ee209352246",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "vNG2KvbLx9MfF0Iq",
+          "name": "Google tag manager"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://tagmanager.googleapis.com/tagmanager/v2/accounts/{{$node[\"Paramètres d'entrée\"].json[\"accountId\"]}}/containers/{{$node[\"Paramètres d'entrée\"].json[\"containerId\"]}}/workspaces/{{$node[\"Paramètres d'entrée\"].json[\"workspaceId\"]}}/tags",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "options": {}
+      },
+      "name": "Récupérer les balises",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        660,
+        160
+      ],
+      "id": "d291460c-eda2-4482-bb08-076b63950ddb",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "vNG2KvbLx9MfF0Iq",
+          "name": "Google tag manager"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Récupérer les données d'entrée\nconst tags = $input.all()[0].json.tag || [];\nconst expectedConversionId = $node[\"Paramètres d'entrée\"].json[\"conversionId\"];\nconst expectedConversionLabel = $node[\"Paramètres d'entrée\"].json[\"conversionLabel\"];\nconst triggerAnalysis = $node[\"Analyser les déclencheurs\"].json;\n\n// Initialiser l'objet résultat\nlet result = {\n  initialTagFound: false,\n  matchingTagPath: null,\n  correctConversionId: false,\n  correctConversionLabel: false,\n  needsCreation: false,\n  needsUpdate: false,\n  accountId: $node[\"Paramètres d'entrée\"].json[\"accountId\"],\n  containerId: $node[\"Paramètres d'entrée\"].json[\"containerId\"],\n  workspaceId: $node[\"Paramètres d'entrée\"].json[\"workspaceId\"],\n  conversionId: expectedConversionId,\n  conversionLabel: expectedConversionLabel,\n  triggersToAssociate: []\n};\n\n// Récupérer les IDs des déclencheurs disponibles\nObject.keys(triggerAnalysis.existingTriggers).forEach(key => {\n  const trigger = triggerAnalysis.existingTriggers[key];\n  if (trigger.exists && trigger.triggerId) {\n    result.triggersToAssociate.push(trigger.triggerId);\n  }\n});\n\n// Rechercher les balises de conversion Google Ads\nconst conversionTags = tags.filter(tag => \n  tag.type === \"googtag\" && \n  tag.parameter && \n  tag.parameter.some(param => \n    param.key === \"tag_type\" && \n    param.value === \"ads_conversion\"\n  )\n);\n\nif (conversionTags.length > 0) {\n  // Au moins une balise de conversion trouvée\n  result.initialTagFound = true;\n  \n  // Vérifier si une balise a l'ID et le label de conversion corrects\n  for (const tag of conversionTags) {\n    const conversionIdParam = tag.parameter.find(param => \n      param.key === \"conversion_id\"\n    );\n    \n    const conversionLabelParam = tag.parameter.find(param => \n      param.key === \"conversion_label\"\n    );\n    \n    const tagConversionId = conversionIdParam ? conversionIdParam.value : null;\n    const tagConversionLabel = conversionLabelParam ? conversionLabelParam.value : null;\n    \n    // Vérifier si cette balise a nos valeurs attendues\n    if (tagConversionId === expectedConversionId && tagConversionLabel === expectedConversionLabel) {\n      // Correspondance parfaite, mais vérifier si les déclencheurs sont associés\n      result.correctConversionId = true;\n      result.correctConversionLabel = true;\n      result.matchingTagPath = tag.path;\n      result.tagId = tag.tagId;\n      \n      // Vérifier si les déclencheurs sont déjà associés\n      const currentTriggerIds = (tag.firingTriggerId || []);\n      const missingTriggerIds = result.triggersToAssociate.filter(id => \n        !currentTriggerIds.includes(id)\n      );\n      \n      if (missingTriggerIds.length > 0) {\n        // Des déclencheurs doivent être associés\n        result.needsUpdate = true;\n        result.missingTriggerIds = missingTriggerIds;\n        result.currentTriggerIds = currentTriggerIds;\n      }\n      \n      break;\n    }\n    \n    // Si nous trouvons une balise avec le bon ID mais un mauvais label, nous la mettrons à jour\n    if (tagConversionId === expectedConversionId) {\n      result.correctConversionId = true;\n      result.matchingTagPath = tag.path;\n      result.tagId = tag.tagId;\n      result.needsUpdate = true;\n      \n      // Inclure également les déclencheurs dans la mise à jour\n      const currentTriggerIds = (tag.firingTriggerId || []);\n      result.missingTriggerIds = result.triggersToAssociate.filter(id => \n        !currentTriggerIds.includes(id)\n      );\n      result.currentTriggerIds = currentTriggerIds;\n      \n      break;\n    }\n  }\n  \n  // Si nous avons trouvé des balises de conversion mais aucune avec le bon ID, nous en créerons une nouvelle\n  if (!result.correctConversionId) {\n    result.needsCreation = true;\n  }\n} else {\n  // Aucune balise de conversion trouvée, besoin d'en créer une\n  result.needsCreation = true;\n}\n\nreturn result;"
+      },
+      "name": "Analyser les balises",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        880,
+        160
+      ],
+      "id": "4d4c9337-9e34-4d3d-b96e-22fa0f236ab1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"needsCreation\"]}}",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "name": "Création nécessaire?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        160
+      ],
+      "id": "66fc2e7f-52d5-4167-ace1-a9f20e504d51"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"needsUpdate\"]}}",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "name": "Mise à jour nécessaire?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        320
+      ],
+      "id": "3f12c295-ed35-4949-a199-38626cece0f4"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tagmanager.googleapis.com/tagmanager/v2/accounts/{{$json[\"accountId\"]}}/containers/{{$json[\"containerId\"]}}/workspaces/{{$json[\"workspaceId\"]}}/tags",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "name",
+              "value": "=Google Ads Conversion {{$json[\"conversionId\"]}}"
+            },
+            {
+              "name": "type",
+              "value": "googtag"
+            },
+            {
+              "name": "parameter",
+              "value": "=[\n {\n \"key\": \"tag_type\",\n \"type\": \"template\",\n \"value\": \"ads_conversion\"\n },\n {\n \"key\": \"conversion_id\",\n \"type\": \"template\",\n \"value\": \"{{$json[\"conversionId\"]}}\"\n },\n {\n \"key\": \"conversion_label\",\n \"type\": \"template\",\n \"value\": \"{{$json[\"conversionLabel\"]}}\"\n },\n {\n \"key\": \"conversion_linker\",\n \"type\": \"template\",\n \"value\": \"true\"\n }\n]"
+            },
+            {
+              "name": "firingTriggerId",
+              "value": "={{$json.triggersToAssociate}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Créer balise",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1320,
+        160
+      ],
+      "id": "f9c52656-436a-47aa-8fc3-1ee209352245",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "vNG2KvbLx9MfF0Iq",
+          "name": "Google tag manager"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://tagmanager.googleapis.com/tagmanager/v2/{{$json[\"matchingTagPath\"]}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "parameter",
+              "value": "=[\n {\n \"key\": \"tag_type\",\n \"type\": \"template\",\n \"value\": \"ads_conversion\"\n },\n {\n \"key\": \"conversion_id\",\n \"type\": \"template\",\n \"value\": \"{{$json[\"conversionId\"]}}\"\n },\n {\n \"key\": \"conversion_label\",\n \"type\": \"template\",\n \"value\": \"{{$json[\"conversionLabel\"]}}\"\n },\n {\n \"key\": \"conversion_linker\",\n \"type\": \"template\",\n \"value\": \"true\"\n }\n]"
+            },
+            {
+              "name": "firingTriggerId",
+              "value": "={{[...$json.currentTriggerIds, ...$json.missingTriggerIds]}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Mettre à jour balise",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1540,
+        320
+      ],
+      "id": "ea12e77f-e9cf-4554-b3eb-65670ee02cf5",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "vNG2KvbLx9MfF0Iq",
+          "name": "Google tag manager"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "name": "Aucune action",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        480
+      ],
+      "id": "0f338e61-1cf3-4ce5-9a37-f9105334ddef"
+    },
+    {
+      "parameters": {
+        "mode": "passThrough",
+        "options": {}
+      },
+      "name": "Fusionner résultats",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        320
+      ],
+      "id": "21bb7c9f-fa10-4f39-8353-bf0e74608da8"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$node[\"Paramètres d'entrée\"].json[\"autoPublish\"]}}",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "name": "Publication auto?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1980,
+        320
+      ],
+      "id": "420b106b-129f-45b9-99cd-0ceb0068564f"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tagmanager.googleapis.com/tagmanager/v2/accounts/{{$node[\"Paramètres d'entrée\"].json[\"accountId\"]}}/containers/{{$node[\"Paramètres d'entrée\"].json[\"containerId\"]}}/workspaces/{{$node[\"Paramètres d'entrée\"].json[\"workspaceId\"]}}/versions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "name",
+              "value": "=Version créée par MCP Autonome - {{$now.toISOString()}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Créer version",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        2200,
+        320
+      ],
+      "id": "f9c52656-436a-47aa-8fc3-1ee209352247",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "vNG2KvbLx9MfF0Iq",
+          "name": "Google tag manager"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://tagmanager.googleapis.com/tagmanager/v2/accounts/{{$node[\"Paramètres d'entrée\"].json[\"accountId\"]}}/containers/{{$node[\"Paramètres d'entrée\"].json[\"containerId\"]}}/versions/{{$json.containerVersionId}}/publish",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "options": {}
+      },
+      "name": "Publier version",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        2420,
+        320
+      ],
+      "id": "ea12e77f-e9cf-4554-b3eb-65670ee02cf6",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "vNG2KvbLx9MfF0Iq",
+          "name": "Google tag manager"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "name": "Sans publication",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2200,
+        480
+      ],
+      "id": "0f338e61-1cf3-4ce5-9a37-f9105334dde5"
+    },
+    {
+      "parameters": {
+        "mode": "passThrough",
+        "options": {}
+      },
+      "name": "Fusionner publication",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        400
+      ],
+      "id": "21bb7c9f-fa10-4f39-8353-bf0e74608da9"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Récupérer les données d'entrée\nconst input = $input.all()[0].json;\nconst createdVersion = $node[\"Créer version\"].json;\nconst publishResult = $node[\"Publier version\"].json;\n\n// Construire l'URL GTM utile pour audit manuel\nconst gtmUrl = `https://tagmanager.google.com/#/container/accounts/${input.accountId}/containers/${input.containerId}/workspaces/${input.workspaceId}/tags`;\n\n// Détails de publication\nlet publicationDetails = {};\nif ($node[\"Paramètres d'entrée\"].json[\"autoPublish\"]) {\n  publicationDetails = {\n    versionCreated: true,\n    versionId: createdVersion.containerVersionId,\n    versionName: createdVersion.name,\n    published: true,\n    publishStatus: publishResult.containerVersion.status || \"UNKNOWN\"\n  };\n} else {\n  publicationDetails = {\n    versionCreated: false,\n    published: false,\n    note: \"Publication automatique désactivée\"\n  };\n}\n\n// Construire le rapport final\nlet finalReport = {\n  meta: {\n    status: \"OK\",\n    timestamp: new Date().toISOString(),\n    reportUrl: gtmUrl\n  },\n  conversion: {\n    id: input.conversionId,\n    label: input.conversionLabel\n  },\n  result: {\n    initialTagFound: input.initialTagFound,\n    created: input.needsCreation,\n    updated: input.needsUpdate,\n    triggersAssociated: input.triggersToAssociate || []\n  },\n  publication: publicationDetails,\n  message: \"\"\n};\n\n// Ajouter un message approprié\nif (input.needsCreation) {\n  finalReport.message = \"🎯 Balise de conversion créée avec succès et associée aux déclencheurs.\";\n} else if (input.needsUpdate) {\n  finalReport.message = \"🔄 Balise de conversion mise à jour avec succès et associée aux déclencheurs.\";\n} else {\n  finalReport.message = \"✅ Balise de conversion déjà correctement configurée.\";\n}\n\nif (publicationDetails.published) {\n  finalReport.message += \" Les modifications ont été publiées automatiquement.\";\n}\n\n// Retourner dans un format MCP-friendly\nreturn [{ json: finalReport }];"
+      },
+      "name": "Générer rapport",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        2860,
+        400
+      ],
+      "id": "420b106b-129f-45b9-99cd-0ceb0068563f"
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Paramètres d'entrée",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Paramètres d'entrée": {
+      "main": [
+        [
+          {
+            "node": "Récupérer les déclencheurs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Récupérer les déclencheurs": {
+      "main": [
+        [
+          {
+            "node": "Analyser les déclencheurs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyser les déclencheurs": {
+      "main": [
+        [
+          {
+            "node": "Déclencheurs à créer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Déclencheurs à créer": {
+      "main": [
+        [
+          {
+            "node": "Créer déclencheur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Créer déclencheur": {
+      "main": [
+        [
+          {
+            "node": "Récupérer les balises",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Récupérer les balises": {
+      "main": [
+        [
+          {
+            "node": "Analyser les balises",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyser les balises": {
+      "main": [
+        [
+          {
+            "node": "Création nécessaire?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Création nécessaire?": {
+      "main": [
+        [
+          {
+            "node": "Créer balise",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mise à jour nécessaire?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mise à jour nécessaire?": {
+      "main": [
+        [
+          {
+            "node": "Mettre à jour balise",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aucune action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Créer balise": {
+      "main": [
+        [
+          {
+            "node": "Fusionner résultats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mettre à jour balise": {
+      "main": [
+        [
+          {
+            "node": "Fusionner résultats",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Aucune action": {
+      "main": [
+        [
+          {
+            "node": "Fusionner résultats",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Fusionner résultats": {
+      "main": [
+        [
+          {
+            "node": "Publication auto?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publication auto?": {
+      "main": [
+        [
+          {
+            "node": "Créer version",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sans publication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Créer version": {
+      "main": [
+        [
+          {
+            "node": "Publier version",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publier version": {
+      "main": [
+        [
+          {
+            "node": "Fusionner publication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sans publication": {
+      "main": [
+        [
+          {
+            "node": "Fusionner publication",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Fusionner publication": {
+      "main": [
+        [
+          {
+            "node": "Générer rapport",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "active": false,
+  "versionId": "c8587f2f-b1bf-44bb-8d2e-1490ffc974b3",
+  "meta": {
+    "instanceId": "ae392bed66ca763ca907af333c258a089db99c3d85f85645d1d84f28292f84da"
+  },
+  "id": "VDvnBJPiHM9rpKoP",
+  "tags": [
+    {
+      "name": "GTM",
+      "id": "1WVbNokB9VqdkjOU"
+    },
+    {
+      "name": "Google Ads",
+      "id": "jsyqbOwyAT2fiqwq"
+    },
+    {
+      "name": "MCP",
+      "id": "ksyqbOwyAT2fiqwr"
+    }
+  ]
+}
